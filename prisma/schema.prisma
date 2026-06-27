@@ -1,0 +1,98 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+enum SourceType {
+  DINGTALK_SHEET
+  DINGTALK_AI_TABLE
+}
+
+enum ConflictStatus {
+  OPEN
+  RESOLVED
+}
+
+model User {
+  id          String   @id @default(cuid())
+  dingUserId  String   @unique
+  name        String
+  accessToken String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  sources SourceConnection[]
+}
+
+model SourceConnection {
+  id              String     @id @default(cuid())
+  name            String
+  type            SourceType
+  documentId      String?
+  workbookId      String?
+  sheetId         String?
+  baseId          String?
+  tableId         String?
+  primaryKeyField String?
+  syncIntervalSec Int        @default(20)
+  lastSyncedAt    DateTime?
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+
+  authUserId String
+  authUser   User @relation(fields: [authUserId], references: [id], onDelete: Cascade)
+
+  rows               TableRowCache[]
+  conflicts          Conflict[]
+  primaryRelations   RelationConfig[] @relation("PrimaryRelation")
+  secondaryRelations RelationConfig[] @relation("SecondaryRelation")
+}
+
+model TableRowCache {
+  id             String   @id @default(cuid())
+  sourceId       String
+  rowId          String
+  dataJson       String
+  hash           String
+  remoteHash     String
+  remoteDataJson String
+  updatedAt      DateTime @updatedAt
+
+  source SourceConnection @relation(fields: [sourceId], references: [id], onDelete: Cascade)
+
+  @@unique([sourceId, rowId])
+}
+
+model RelationConfig {
+  id                String   @id @default(cuid())
+  name              String
+  primarySourceId   String
+  secondarySourceId String
+  primaryField      String
+  secondaryField    String
+  displayFieldsJson String
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  primarySource   SourceConnection @relation("PrimaryRelation", fields: [primarySourceId], references: [id], onDelete: Cascade)
+  secondarySource SourceConnection @relation("SecondaryRelation", fields: [secondarySourceId], references: [id], onDelete: Cascade)
+}
+
+model Conflict {
+  id          String         @id @default(cuid())
+  sourceId    String
+  rowId       String
+  field       String
+  baseValue   String?
+  localValue  String?
+  remoteValue String?
+  status      ConflictStatus @default(OPEN)
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+
+  source SourceConnection @relation(fields: [sourceId], references: [id], onDelete: Cascade)
+}
